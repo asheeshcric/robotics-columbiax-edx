@@ -1,0 +1,17 @@
+1. Make all the ros commands available to the zsh 
+source /opt/ros/kinetic/setup.zsh
+
+2. Make a directory for catkin workspace
+mkdir -p catkin_ws/src
+cd catkin_ws
+
+3. Run the catkin_make command to build:
+"""
+The catkin_make command is a convenient tool for working with catkin workspaces. Running it the first time in your workspace, it will create a CMakeLists.txt link in your 'src' folder. Additionally, if you look in your current directory you should now have a 'build' and 'devel' folder. Inside the 'devel' folder you can see that there are now several setup.*sh files. Sourcing any of these files will overlay this workspace on top of your environment. 
+"""
+
+4. Source the newly created setup file:
+source devel/setup.zsh
+
+5. Make sure that the workspace is properly overlayed by the setup script
+echo $ROS_PACKAGE_PATH
