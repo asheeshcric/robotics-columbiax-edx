@@ -1,0 +1,24 @@
+# 1. Setup your sources list:
+sudo sh -c 'echo "deb http://packages.ros.org/ros/ubuntu xenial main" > /etc/apt/sources.list.d/ros-latest.list'
+
+# 2. Set up your keys
+sudo apt-key adv --keyserver hkp://ha.pool.sks-keyservers.net:80 --recv-key 421C365BD9FF1F717815A3895523BAEEB01FA116
+
+# 3. Update package index
+sudo apt-get update
+
+# 4. Install full desktop ROS-Kinetic
+sudo apt-get install ros-kinetic-desktop-full
+
+# 5. Initialize "rosdep" - Enables you to install dependencies for source you want to compile. It is also required to run some core components in ROS 
+sudo rosdep init
+rosdep update
+
+# 6. Environment setup: Automatically add ros variables to your zshrc file, every time a new shell is launched
+echo "source /opt/ros/kinetic/setup.zsh" >> ~/.zshrc
+source ~/.zshrc
+
+
+#  7. Dependencies for building you own packages
+sudo apt-get install python-rosinstall python-rosinstall-generator python-wstool build-essential
+
