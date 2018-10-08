@@ -1,0 +1,26 @@
+# Creating a ROS Environment for a new project
+# Make sure that your zsh/bash script sources the ROS Kinetic script everytime it starts
+source /opt/ros/kinetic/setup.zsh
+
+1. Create a catkin workspace.
+
+2. Build the workspace:
+	cd catkin_ws
+	catkin_make
+	
+3. Source the devel/setup.zsh file
+	source devel/setup.zsh
+	
+4.  Run 'roscore' in a separate terminal
+
+
+# Only for Project 2
+5. On two separate terminals run the following commands:
+	rosrun marker_publisher marker_publisher
+	rosrun project2_solution solution.py
+	
+6. To visualize the markers, launch rviz in a new terminal
+	rosrun rviz rviz
+	
+	
+	First thing you need to do is change the Fixed Frame option on the left of the UI. Select "base_frame", and notice that the Global Status now reads "Ok". Now we need to add the information we want to be displayed. Click Add and on the popup screen select the tab "By topic". Here you will see the topic /visualization_marker>Marker. Select it and then you should be able to see the block, cylinder and arrow. You can also add the item "TF" if you want to see a visual representation of the frames.
