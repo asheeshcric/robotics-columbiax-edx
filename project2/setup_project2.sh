@@ -1,7 +1,7 @@
-source /opt/ros/indigo/setup.bash
+source /opt/ros/kinetic/setup.zsh
 
 export ROS_NODE_PORT=`get_free_port.py`
-export ROS_MASTER_URI=http://localhost:$ROS_NODE_PORT
+export ROS_MASTER_URI=http://asheesh-Aspire-E5-575G:11311/
 
 lf="ros.log"
 if [ -e $lf ]; then
@@ -24,7 +24,7 @@ echo "Launching RosBridge server..."
 
 cd catkin_ws
 catkin_make
-source devel/setup.bash
+source devel/setup.zsh
 cd ..
 
 ( ( (stdbuf -oL rosrun marker_publisher marker_publisher) 1> >(stdbuf -oL sed 's/^/ASN1: /') 2>&1 ) >> $lf ) &
