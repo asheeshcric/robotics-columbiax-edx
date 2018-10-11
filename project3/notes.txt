@@ -1,0 +1,17 @@
+1. roscore
+
+2. rosparam set robot_description --textfile kuka_lwr_arm.urdf
+	rosrun robot_sim robot_sim_bringup
+	
+3. rosrun robot_mover mover
+
+4. rosrun forward_kinematics solution.py
+
+5. rosrun rviz rviz
+	
+	Inside RVIZ:
+		- Change Fixed Frame to "world_link" (You will be able to do this once there with be any TF in your solution code)
+		- Click Add and select RobotModel from the list of options
+			- After that you can see the robot arm moving in a coherent way back and forth from an upright position to another
+			predetermined pose
+		- To see the transforms, Click Add > TF
