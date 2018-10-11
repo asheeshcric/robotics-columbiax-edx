@@ -129,6 +129,67 @@ class ForwardKinematics(object):
         
         # YOUR CODE GOES HERE
         
+        return my_method(self, link_names, joints, joint_values)
+
+
+
+    def my_method(self, link_names, joints, joint_values):
+        all_transforms = tf.msg.tfMessage()
+        # We start with the identity
+        T = tf.transformations.identity_matrix()
+
+        #rospy.logdebug("[Link Names]: %s", link_names)
+
+        #rospy.logdebug("[Joint Origins x,y,z]: %s", joints[0].origin.xyz)
+        #rospy.logdebug("[Joint Types]: %s", joints[0].type)
+        #rospy.logdebug("[Joint Names]: %s", joints[0].name)
+        #rospy.logdebug("[Joint Axis]: %s", joints[0].axis)
+
+        #rospy.logdebug("[Joint Name Values]: %s", joint_values.name)
+        #rospy.logdebug("[Joint Position Values]: %s", joint_values.position)
+
+        '''
+        the transform from the world to link i should be published with world_link as the parent
+        frame and link_names[i] as the child frame.
+
+        One way to complete the assignment is in iterative fashion: assuming you have compute the
+        transform from the world_link coordinate frame to link i, you just need to update that
+        with the transform from link i to link i+1 and you now have the transform from the
+        world_link frame to link i+1.
+        '''
+
+        for it in range(len(joints)):
+            #rospy.logdebug("[%s]: %s", it+1, joints[it+1].name)
+            #rospy.logdebug("[%s]: Parent=%s, Child=%s", it+1, link_names[it], link_names[it+1])
+
+            # translation part respect of the previous frame
+            D = tf.transformations.translation_matrix(joints[it].origin.xyz)
+
+            # Obtain current joint value
+            try:
+                index = joint_values.name.index(joints[it].name)
+                q = joint_values.position[index]
+
+            except ValueError as e:
+                q = 0.0
+                rospy.logdebug("%s", e)
+
+            if joints[it].type == 'revolute':
+                # Obtain the rotation axis of the frame
+                axis = joints[it].axis
+                # Rotate q radians  (or translate q meters) about a single axis
+                R = tf.transformations.quaternion_matrix(
+                    tf.transformations.quaternion_about_axis(
+                        q, axis))
+            else :  # fixed joint
+                R = tf.transformations.identity_matrix()
+
+            T = tf.transformations.concatenate_matrices(T,D,R)
+
+            all_transforms.transforms.append(
+                convert_to_message(T, link_names[it], 'world_link'))
+
+        #rospy.logdebug("all_transforms: %s", all_transforms.transforms)
         return all_transforms
        
 if __name__ == '__main__':
