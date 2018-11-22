@@ -27,9 +27,60 @@ def S_matrix(w):
 # This is the function that must be filled in as part of the Project.
 def cartesian_control(joint_transforms, b_T_ee_current, b_T_ee_desired,
                       red_control, q_current, q0_desired):
-    num_joints = len(joint_transforms)
-    dq = numpy.zeros(num_joints)
+    number_of_joints = len(joint_transforms)
+    dq = numpy.zeros(number_of_joints)
+
     # -------------------- Fill in your code here ---------------------------
+
+    end_effector_t_b = tf.transformations.inverse_matrix(b_T_ee_current)
+    end_effector_t_ee = numpy.dot(end_effector_t_b, b_T_ee_desired)
+
+    translation_b_t_ee = tf.transformations.translation_from_matrix(end_effector_t_ee)
+
+    rotation_r_ee = end_effector_t_ee[:3, :3]
+
+    angle, axis = rotation_from_matrix(end_effector_t_ee)
+
+    rotation = numpy.dot(angle, axis)
+
+    invert_rotation_ee_b = tf.transformations.inverse_matrix(rotation_r_ee)
+    linear_gain = 3
+    rotational_gain = 1.5
+    delta_for_x = numpy.append(translation_b_t_ee * linear_gain, rotation * rotational_gain)
+
+    prop_gain = 1
+    dot_x = prop_gain * delta_for_x
+
+    capitol_j = numpy.empty((6, 0))
+
+    for joint_j in range(number_of_joints):
+        b_t_joint = joint_transforms[joint_j]
+        joint_t_b = tf.transformations.inverse_matrix(b_t_joint)
+        joint_t_ee = numpy.dot(joint_t_b, b_T_ee_current)
+        ee_t_joint = tf.transformations.inverse_matrix(joint_t_ee)
+
+        ee_r_joint = ee_t_joint[:3, :3]
+
+        j_t_ee = tf.transformations.translation_from_matrix(joint_t_ee)
+        capitol_s = S_matrix(j_t_ee)
+
+        vertical_joint = numpy.append(
+            numpy.append(ee_r_joint, numpy.dot(-ee_r_joint, capitol_s), axis=1),
+            numpy.append(numpy.zeros([3, 3]), ee_r_joint, axis=1),
+            axis=0
+        )
+        capitol_j = numpy.column_stack((capitol_j, vertical_joint[:, 5]))
+
+    joint_pin_vertical = numpy.linalg.pinv(capitol_j, rcond=1e-2)
+
+    dq = numpy.dot(joint_pin_vertical, dot_x)
+
+    if red_control is True:
+        joint_pin_vertical = numpy.linalg.pinv(capitol_j, rcond=0)
+        n_dq = numpy.dot(
+            numpy.identity(7) - numpy.dot(joint_pin_vertical, capitol_j),
+            numpy.array([q0_desired - q_current[0], 0, 0, 0, 0, 0, 0]))
+        dq = numpy.dot(joint_pin_vertical, dot_x) + n_dq
 
     # ----------------------------------------------------------------------
     return dq
