@@ -55,36 +55,42 @@ def convert_from_trans_message(msg):
     return numpy.dot(T, R)
 
 
-def get_distance(point1, point2):
-    return numpy.linalg.norm(numpy.subtract(point1, point2))
-
-
-def get_vector(point1, point2):
+def fetch_vector(point1, point2):
     return numpy.subtract(point1, point2)
 
 
-def fetch_point_at_distance(closest_point, rand_point, factor):
-    temp_vector = get_vector(rand_point, closest_point)
-    vector = temp_vector / numpy.linalg.norm(temp_vector)
+def fetch_unit_vector(point1, point2):
+    v = fetch_vector(point1, point2)
+    return v / numpy.linalg.norm(v)
+
+
+def fetch_distance(point1, point2):
+    return numpy.linalg.norm(fetch_vector(point1, point2))
+
+
+def fetch_maximum_number_points(point1, point2, step):
+    return max(numpy.ceil(numpy.true_divide(abs(fetch_vector(point1, point2)), step)))
+
+
+def fetch_closest_point(tree, q):
+    dists = [fetch_distance(q_pos, q) for i, q_pos in enumerate(d["pos_configuration_space"] for d in tree)]
+    min_dist_index = dists.index(min(dists))
+    nearest_point = tree[min_dist_index].get("pos_configuration_space")
+    return min_dist_index, nearest_point
+
+
+def fetch_point_at_dist(nearest_point, rand_point, factor):
+    vector = fetch_unit_vector(rand_point, nearest_point)
     vector *= factor
-    vector = numpy.add(vector, closest_point)
+    vector = numpy.add(vector, nearest_point)
     return vector
-
-
-def get_max_num_points(point1, point2, step_size):
-    return max(numpy.ceil(numpy.true_divide(abs(get_vector(point1, point2)), step_size)))
-
-
-def fetch_closest_point(node_list, r):
-    dists = [get_distance(q_pos, r) for i, q_pos in enumerate(d["pos_configuration_space"] for d in node_list)]
-    minimum_dist_index = dists.index(min(dists))
-    closest_point = node_list[minimum_dist_index].get("pos_configuration_space")
-    return minimum_dist_index, closest_point
 
 
 class MoveArm(object):
 
     def __init__(self):
+        print
+        "Motion Planning Initializing..."
         # Prepare the mutex for synchronization
         self.mutex = Lock()
 
@@ -93,20 +99,20 @@ class MoveArm(object):
         self.num_joints = 7
         self.q_min = []
         self.q_max = []
-        self.q_min.append(-3.1459)
-        self.q_max.append(3.1459)
-        self.q_min.append(-3.1459)
-        self.q_max.append(3.1459)
-        self.q_min.append(-3.1459)
-        self.q_max.append(3.1459)
-        self.q_min.append(-3.1459)
-        self.q_max.append(3.1459)
-        self.q_min.append(-3.1459)
-        self.q_max.append(3.1459)
-        self.q_min.append(-3.1459)
-        self.q_max.append(3.1459)
-        self.q_min.append(-3.1459)
-        self.q_max.append(3.1459)
+        self.q_min.append(-3.14159);
+        self.q_max.append(3.14159)
+        self.q_min.append(-3.14159);
+        self.q_max.append(3.14159)
+        self.q_min.append(-3.14159);
+        self.q_max.append(3.14159)
+        self.q_min.append(-3.14159);
+        self.q_max.append(3.14159)
+        self.q_min.append(-3.14159);
+        self.q_max.append(3.14159)
+        self.q_min.append(-3.14159);
+        self.q_max.append(3.14159)
+        self.q_min.append(-3.14159);
+        self.q_max.append(3.14159)
         # How finely to sample each joint
         self.q_sample = [0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 0.1]
         self.joint_names = ["lwr_arm_0_joint",
@@ -135,20 +141,28 @@ class MoveArm(object):
         # Wait for moveit IK service
         rospy.wait_for_service("compute_ik")
         self.ik_service = rospy.ServiceProxy('compute_ik', moveit_msgs.srv.GetPositionIK)
+        print
+        "IK service ready"
 
         # Wait for validity check service
         rospy.wait_for_service("check_state_validity")
         self.state_valid_service = rospy.ServiceProxy('check_state_validity',
                                                       moveit_msgs.srv.GetStateValidity)
+        print
+        "State validity service ready"
 
         # Initialize MoveIt
         self.robot = moveit_commander.RobotCommander()
         self.scene = moveit_commander.PlanningSceneInterface()
         self.group_name = "lwr_arm"
         self.group = moveit_commander.MoveGroupCommander(self.group_name)
+        print
+        "MoveIt! interface ready"
 
         # Options
         self.subsample_trajectory = True
+        print
+        "Initialization done."
 
     def get_joint_val(self, joint_state, name):
         if name not in joint_state.name:
@@ -225,29 +239,27 @@ class MoveArm(object):
         res = self.state_valid_service(req)
         return res.valid
 
-    def fetch_rand_point(self):
-        return [random.uniform(self.q_min[i], self.q_max[i]) for i in range(self.num_joints)]
+    def make_discrete_path(self, nearest_point, target_point):
+        step_weight = self.q_sample
+        maximum_points = fetch_maximum_number_points(target_point, nearest_point, step_weight)
 
-    def discrete_path(self, closest_point, target_point):
-        step_size = self.q_sample
-        max_num_points = get_max_num_points(target_point, closest_point, step_size)
-
-        m_vector = numpy.true_divide(get_vector(target_point, closest_point), max_num_points - 1)
-        b_vector = numpy.true_divide(numpy.subtract(numpy.multiply(closest_point, max_num_points), target_point),
-                                     max_num_points - 1)
-        t_vector = [m_vector * i + b_vector for i in range(int(max_num_points) + 1)]
+        m_vector = numpy.true_divide(fetch_vector(target_point, nearest_point), maximum_points - 1)
+        b_vector = numpy.true_divide(numpy.subtract(numpy.multiply(nearest_point, maximum_points), target_point),
+                                     maximum_points - 1)
+        t_vector = [m_vector * i + b_vector for i in range(int(maximum_points) + 1)]
         return t_vector
 
-    def is_path_collision_free(self, closest_point, target_point):
-        path = self.discrete_path(closest_point, target_point)
-
+    def is_free_collision_path(self, nearest_point, target_point):
+        path = self.make_discrete_path(nearest_point, target_point)
         for row in path:
             if self.is_state_valid(row) is False:
                 return False
         return True
 
+    def fetch_random_point(self):
+        return [random.uniform(self.q_min[i], self.q_max[i]) for i in range(self.num_joints)]
+
     def motion_plan(self, q_start, q_goal, q_min, q_max):
-        # Replace this with your code
         rrt_node_object = {
             "pos_configuration_space": q_start,
             "par_node": -1
@@ -256,22 +268,22 @@ class MoveArm(object):
 
         max_nodes = 150
         max_time = 240
-        start = rospy.get_rostime().secs
+        start_time = rospy.get_rostime().secs
         current_time = rospy.get_rostime().secs
 
-        while (len(rrt_node_list) < max_nodes) or ((current_time - start) < max_time):
-            rand_point = self.fetch_rand_point()
+        while (len(rrt_node_list) < max_nodes) or ((current_time - start_time) < max_time):
+            rand_point = self.fetch_random_point()
 
-            minimum_index_dist, closest_point = fetch_closest_point(rrt_node_list, rand_point)
+            minimum_dist_index, nearest_point = fetch_closest_point(rrt_node_list, rand_point)
 
-            target_point = fetch_point_at_distance(closest_point, rand_point, 0.5)
+            target_point = fetch_point_at_dist(nearest_point, rand_point, 0.5)
 
-            if self.is_path_collision_free(closest_point, target_point) is True:
+            if self.is_free_collision_path(nearest_point, target_point) is True:
                 rrt_node_object.update({"pos_configuration_space": target_point})
-                rrt_node_object.update({"par_node": minimum_index_dist})
+                rrt_node_object.update({"par_node": minimum_dist_index})
                 rrt_node_list.append(rrt_node_object.copy())
 
-                if self.is_path_collision_free(target_point, q_goal) is True:
+                if self.is_free_collision_path(target_point, q_goal) is True:
                     par_node = len(rrt_node_list) - 1
                     rrt_node_object.update({"par_node": par_node})
                     rrt_node_object.update({"pos_configuration_space": q_goal})
@@ -297,8 +309,7 @@ class MoveArm(object):
         copy_q_list = [q_list[0]]
 
         for i in range(len(q_list) - 2):
-
-            if self.is_path_collision_free(q_list[i], q_list[i + 2]) is False:
+            if self.is_free_collision_path(q_list[i], q_list[i + 2]) is False:
                 copy_q_list.append(q_list[i])
 
         copy_q_list.append(q_list[-1])
@@ -336,14 +347,23 @@ class MoveArm(object):
         T = convert_from_trans_message(msg)
         self.mutex.acquire()
         q_start = self.q_from_joint_state(self.joint_state)
+        print
+        "Solving IK"
         q_goal = self.IK(T)
         if len(q_goal) == 0:
+            print
+            "IK failed, aborting"
             self.mutex.release()
             return
+        print
+        "IK solved, planning"
         trajectory = self.project_plan(numpy.array(q_start), q_goal, self.q_min, self.q_max)
         if not trajectory.points:
-            pass
+            print
+            "Motion plan failed, aborting"
         else:
+            print
+            "Trajectory received with " + str(len(trajectory.points)) + " points"
             self.execute(trajectory)
         self.mutex.release()
 
