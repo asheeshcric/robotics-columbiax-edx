@@ -55,35 +55,22 @@ def convert_from_trans_message(msg):
     return numpy.dot(T, R)
 
 
-def fetch_vector(point1, point2):
-    return numpy.subtract(point1, point2)
+class Node(object):
 
+    def __init__(self, config):
+        # config list
+        self.config = config
+        self.parent = None
 
-def fetch_unit_vector(point1, point2):
-    v = fetch_vector(point1, point2)
-    return v / numpy.linalg.norm(v)
+    def SetParent(self, parent):
+        # Parent Node type
+        self.parent = parent
 
+    def GetParent(self):
+        return self.parent
 
-def fetch_distance(point1, point2):
-    return numpy.linalg.norm(fetch_vector(point1, point2))
-
-
-def fetch_maximum_number_points(point1, point2, step):
-    return max(numpy.ceil(numpy.true_divide(abs(fetch_vector(point1, point2)), step)))
-
-
-def fetch_closest_point(tree, q):
-    dists = [fetch_distance(q_pos, q) for i, q_pos in enumerate(d["pos_configuration_space"] for d in tree)]
-    min_dist_index = dists.index(min(dists))
-    nearest_point = tree[min_dist_index].get("pos_configuration_space")
-    return min_dist_index, nearest_point
-
-
-def fetch_point_at_dist(nearest_point, rand_point, factor):
-    vector = fetch_unit_vector(rand_point, nearest_point)
-    vector *= factor
-    vector = numpy.add(vector, nearest_point)
-    return vector
+    def GetConfig(self):
+        return self.config
 
 
 class MoveArm(object):
@@ -99,20 +86,20 @@ class MoveArm(object):
         self.num_joints = 7
         self.q_min = []
         self.q_max = []
-        self.q_min.append(-3.14159);
-        self.q_max.append(3.14159)
-        self.q_min.append(-3.14159);
-        self.q_max.append(3.14159)
-        self.q_min.append(-3.14159);
-        self.q_max.append(3.14159)
-        self.q_min.append(-3.14159);
-        self.q_max.append(3.14159)
-        self.q_min.append(-3.14159);
-        self.q_max.append(3.14159)
-        self.q_min.append(-3.14159);
-        self.q_max.append(3.14159)
-        self.q_min.append(-3.14159);
-        self.q_max.append(3.14159)
+        self.q_min.append(-3.1459);
+        self.q_max.append(3.1459)
+        self.q_min.append(-3.1459);
+        self.q_max.append(3.1459)
+        self.q_min.append(-3.1459);
+        self.q_max.append(3.1459)
+        self.q_min.append(-3.1459);
+        self.q_max.append(3.1459)
+        self.q_min.append(-3.1459);
+        self.q_max.append(3.1459)
+        self.q_min.append(-3.1459);
+        self.q_max.append(3.1459)
+        self.q_min.append(-3.1459);
+        self.q_max.append(3.1459)
         # How finely to sample each joint
         self.q_sample = [0.05, 0.05, 0.05, 0.1, 0.1, 0.1, 0.1]
         self.joint_names = ["lwr_arm_0_joint",
@@ -239,82 +226,61 @@ class MoveArm(object):
         res = self.state_valid_service(req)
         return res.valid
 
-    def make_discrete_path(self, nearest_point, target_point):
-        step_weight = self.q_sample
-        maximum_points = fetch_maximum_number_points(target_point, nearest_point, step_weight)
+    def validate_node_point(self, q_start, q_goal):
+        step_size = 0.2
+        begin_to_end = q_goal - q_start
+        normal_stage = numpy.linalg.norm(begin_to_end)
+        unit_stage = begin_to_end / normal_stage
+        decreasing_points = numpy.outer(numpy.arange(step_size, normal_stage, step_size), unit_stage) + q_start
+        past_point = [q_start]
+        for decreasing_point in decreasing_points:
+            if self.is_state_valid(decreasing_point) is False:
+                return past_point
+            past_point = numpy.array([decreasing_point])
 
-        m_vector = numpy.true_divide(fetch_vector(target_point, nearest_point), maximum_points - 1)
-        b_vector = numpy.true_divide(numpy.subtract(numpy.multiply(nearest_point, maximum_points), target_point),
-                                     maximum_points - 1)
-        t_vector = [m_vector * i + b_vector for i in range(int(maximum_points) + 1)]
-        return t_vector
-
-    def is_free_collision_path(self, nearest_point, target_point):
-        path = self.make_discrete_path(nearest_point, target_point)
-        for row in path:
-            if self.is_state_valid(row) is False:
-                return False
-        return True
-
-    def fetch_random_point(self):
-        return [random.uniform(self.q_min[i], self.q_max[i]) for i in range(self.num_joints)]
+        return q_goal
 
     def motion_plan(self, q_start, q_goal, q_min, q_max):
-        rrt_node_object = {
-            "pos_configuration_space": q_start,
-            "par_node": -1
-        }
-        rrt_node_list = [rrt_node_object.copy()]
-
-        max_nodes = 150
-        max_time = 240
-        start_time = rospy.get_rostime().secs
-        current_time = rospy.get_rostime().secs
-
-        while (len(rrt_node_list) < max_nodes) or ((current_time - start_time) < max_time):
-            rand_point = self.fetch_random_point()
-
-            minimum_dist_index, nearest_point = fetch_closest_point(rrt_node_list, rand_point)
-
-            target_point = fetch_point_at_dist(nearest_point, rand_point, 0.5)
-
-            if self.is_free_collision_path(nearest_point, target_point) is True:
-                rrt_node_object.update({"pos_configuration_space": target_point})
-                rrt_node_object.update({"par_node": minimum_dist_index})
-                rrt_node_list.append(rrt_node_object.copy())
-
-                if self.is_free_collision_path(target_point, q_goal) is True:
-                    par_node = len(rrt_node_list) - 1
-                    rrt_node_object.update({"par_node": par_node})
-                    rrt_node_object.update({"pos_configuration_space": q_goal})
-                    rrt_node_list.append(rrt_node_object.copy())
-                    break
-                else:
-                    pass
-            else:
-                pass
-
-            current_time = rospy.get_rostime().secs
-
-        q_list = [q_goal]
-        par_node = rrt_node_list[-1].get("par_node")
-
+        node_space = numpy.array([q_start], dtype=numpy.float64)
+        node_index = []
+        step_size = 0.5
         while True:
-            q_list.insert(0, rrt_node_list[par_node].get("pos_configuration_space"))
-            if par_node <= 0:
+            if numpy.allclose(self.validate_node_point(node_space[-1], q_goal), numpy.array([q_goal])):
+                node_index.append(len(node_space) - 1)
+                node_space = numpy.append(node_space, numpy.array([q_goal]), axis=0)
                 break
-            else:
-                par_node = rrt_node_list[par_node].get("par_node")
 
-        copy_q_list = [q_list[0]]
+            random_node_q = []
+            for i in range(self.num_joints):
+                random_node_q.append(random.uniform(-3.1459, 3.1459))
 
-        for i in range(len(q_list) - 2):
-            if self.is_free_collision_path(q_list[i], q_list[i + 2]) is False:
-                copy_q_list.append(q_list[i])
+            random_node_np = numpy.array([random_node_q])
+            vector_into_points = node_space - random_node_np
 
-        copy_q_list.append(q_list[-1])
-        q_list = copy_q_list
+            closest_index = numpy.argmin(numpy.sqrt(numpy.sum(vector_into_points ** 2, axis=1)))
+            closest_point = node_space[closest_index]
 
+            closest_random = random_node_np - closest_point
+            normal_node_ntr = numpy.linalg.norm(closest_random)
+            unit_node_ntr = closest_random / normal_node_ntr
+            next_point = closest_point + unit_node_ntr * step_size
+
+            point_valid = self.validate_node_point(closest_point, next_point)
+
+            node_space = numpy.append(node_space, point_valid, axis=0)
+            node_index.append(closest_index)
+
+        q_list = []
+        current_index = node_index[-1]
+        q_list.append(q_goal)
+        for i in range(len(node_space)):
+            if numpy.all(node_space[current_index] == q_start):
+                q_list.append(q_start.tolist())
+                break
+            q_list.append(node_space[current_index].tolist())
+            current_index = node_index[current_index - 1]
+
+        q_list.reverse()
         return q_list
 
     def create_trajectory(self, q_list, v_list, a_list, t):
@@ -347,8 +313,6 @@ class MoveArm(object):
         T = convert_from_trans_message(msg)
         self.mutex.acquire()
         q_start = self.q_from_joint_state(self.joint_state)
-        print
-        "Solving IK"
         q_goal = self.IK(T)
         if len(q_goal) == 0:
             print
